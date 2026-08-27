@@ -78,8 +78,17 @@ jobs:
       - name: Build unsigned .app (device / arm64)
         run: |
           set -o pipefail
+          # Capacitor 8 generates a Swift Package Manager project by default
+          # (ios/App/App.xcodeproj, NO CocoaPods workspace). Older / pods setups
+          # produce App.xcworkspace instead. Detect and use whichever exists.
+          if [ -d "ios/App/App.xcworkspace" ]; then
+            CONTAINER_FLAG=(-workspace ios/App/App.xcworkspace)
+          else
+            CONTAINER_FLAG=(-project ios/App/App.xcodeproj)
+          fi
+          echo "Building with: ${CONTAINER_FLAG[*]}"
           xcodebuild \
-            -workspace ios/App/App.xcworkspace \
+            "${CONTAINER_FLAG[@]}" \
             -scheme App \
             -configuration Release \
             -sdk iphoneos \
