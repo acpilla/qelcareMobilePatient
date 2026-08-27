@@ -1,0 +1,14 @@
+/node_modules
+/build
+/dist
+/android/.gradle
+/android/app/build
+# iOS native project is generated fresh by GitHub Actions (npx cap add ios) on a
+# macOS runner — it cannot be produced on Windows and should not be committed.
+/ios
+.env
+.env.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.DS_Store

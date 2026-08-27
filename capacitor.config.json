@@ -1,0 +1,14 @@
+{
+  "appId": "com.qelcare.patient",
+  "appName": "QELCare Patient",
+  "webDir": "dist",
+  "bundledWebRuntime": false,
+  "server": {
+    "cleartext": true
+  },
+  "android": {
+    "allowMixedContent": true,
+    "captureInput": true,
+    "webContentsDebuggingEnabled": false
+  }
+}

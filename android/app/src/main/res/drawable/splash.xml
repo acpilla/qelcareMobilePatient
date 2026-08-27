@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Full-screen launch splash: brand logo centered on white. Shown as the
+     activity windowBackground so pre-Android-12 devices (e.g. Galaxy S5) render
+     the complete emblem + wordmark + tagline, not just a centered icon. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#FCFBFC" />
+        </shape>
+    </item>
+    <item>
+        <bitmap
+            android:src="@drawable/splash_logo"
+            android:gravity="center" />
+    </item>
+</layer-list>

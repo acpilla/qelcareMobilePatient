@@ -1,0 +1,38 @@
+{
+  "name": "qelcare-patient-mobile",
+  "version": "1.0.3",
+  "private": true,
+  "description": "Patient-only QELCare mobile app packaged with Capacitor for Android APK builds; regenerated against qelcaresql-V7 full dump.",
+  "type": "module",
+  "dependencies": {
+    "@capacitor/android": "^8.3.4",
+    "@capacitor/app": "^8.1.0",
+    "@capacitor/core": "^8.3.4",
+    "@capacitor/ios": "^8.3.4",
+    "baseline-browser-mapping": "^2.10.35",
+    "pdfjs-dist": "^3.11.174",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^7.14.2",
+    "tesseract.js": "^6.0.1"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^8.3.4",
+    "@vitejs/plugin-react": "^5.0.4",
+    "vite": "^7.2.4"
+  },
+  "scripts": {
+    "start": "vite --host 0.0.0.0",
+    "dev": "vite --host 0.0.0.0",
+    "build": "vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "cap:add:android": "npm run build && npx cap add android",
+    "cap:sync:android": "npm run build && npx cap sync android",
+    "cap:open:android": "npx cap open android",
+    "cap:add:ios": "npm run build && npx cap add ios",
+    "cap:sync:ios": "npm run build && npx cap sync ios",
+    "apk:debug": "npm run cap:sync:android && cd android && ./gradlew assembleDebug",
+    "apk:release": "npm run cap:sync:android && cd android && ./gradlew assembleRelease"
+  }
+}

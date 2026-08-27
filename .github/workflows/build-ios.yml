@@ -1,0 +1,115 @@
+name: Build iOS (unsigned IPA)
+
+# Runs on every push to main, and can also be started by hand from the
+# GitHub "Actions" tab (workflow_dispatch). GitHub gives public repos and
+# personal accounts free macOS runner minutes — no Mac and no paid Apple
+# Developer account are needed to PRODUCE the app. Signing happens later,
+# on your Windows PC, via Sideloadly + a free Apple ID.
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-ios:
+    # macOS is required for Xcode + CocoaPods. macos-latest already ships
+    # Node, Xcode, and CocoaPods pre-installed.
+    runs-on: macos-latest
+    timeout-minutes: 40
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20   # Capacitor 8 needs Node 20+
+
+      # NOTE: `npm install` (not `npm ci`) because @capacitor/ios was just added
+      # to package.json and may not be in the committed lockfile yet. install
+      # reconciles that; ci would fail on the mismatch.
+      - name: Install dependencies
+        run: npm install
+
+      # Vite reads .env.production (committed) here, so VITE_API_URL is baked
+      # into the bundle and the installed app can reach the live backend.
+      - name: Build web assets (Vite -> dist/)
+        run: npm run build
+
+      # The iOS native project is NOT committed; generate it fresh on the mac
+      # runner. Guard so a cached workspace never double-adds it.
+      - name: Add iOS platform
+        run: |
+          if [ ! -d "ios" ]; then
+            npx cap add ios
+          fi
+
+      - name: Sync Capacitor iOS (copies web + plugins, runs pod install)
+        run: npx cap sync ios
+
+      # Inject the App Store permission strings and App Transport Security into
+      # the generated Info.plist. Edit the two description strings below if you
+      # ever want to reword the iOS permission prompts.
+      - name: Inject Info.plist permissions & App Transport Security
+        run: |
+          set -e
+          PLIST="ios/App/App/Info.plist"
+          PB=/usr/libexec/PlistBuddy
+
+          # Camera + Photo Library usage strings (required or iOS rejects the app / crashes on prompt)
+          $PB -c "Add :NSCameraUsageDescription string 'This app requires access to the camera to scan medical records.'" "$PLIST" \
+            || $PB -c "Set :NSCameraUsageDescription 'This app requires access to the camera to scan medical records.'" "$PLIST"
+          $PB -c "Add :NSPhotoLibraryUsageDescription string 'This app requires access to photos to upload medical documents.'" "$PLIST" \
+            || $PB -c "Set :NSPhotoLibraryUsageDescription 'This app requires access to photos to upload medical documents.'" "$PLIST"
+
+          # App Transport Security: force HTTPS for API calls, but allow local
+          # networking so you can test against a LAN backend during development.
+          $PB -c "Delete :NSAppTransportSecurity" "$PLIST" 2>/dev/null || true
+          $PB -c "Add :NSAppTransportSecurity dict" "$PLIST"
+          $PB -c "Add :NSAppTransportSecurity:NSAllowsArbitraryLoads bool false" "$PLIST"
+          $PB -c "Add :NSAppTransportSecurity:NSAllowsLocalNetworking bool true" "$PLIST"
+
+          echo "----- Patched Info.plist (first 60 lines) -----"
+          $PB -c "Print" "$PLIST" | head -60
+
+      # Build an UNSIGNED app for a real device (arm64 / iphoneos). Sideloadly
+      # signs it afterwards with your free Apple ID.
+      - name: Build unsigned .app (device / arm64)
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -workspace ios/App/App.xcworkspace \
+            -scheme App \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            DEVELOPMENT_TEAM="" \
+            clean build
+
+      # Wrap the .app in a Payload/ folder and zip it into a .ipa (the standard
+      # unsigned-IPA packaging; xcodebuild -exportArchive needs signing, so we
+      # package by hand instead).
+      - name: Package into .ipa
+        run: |
+          set -e
+          APP_PATH="build/Build/Products/Release-iphoneos/App.app"
+          if [ ! -d "$APP_PATH" ]; then
+            echo "::error::App.app not found at $APP_PATH — the Xcode build step failed."
+            exit 1
+          fi
+          mkdir -p Payload
+          cp -R "$APP_PATH" Payload/
+          zip -r QELCarePatient-unsigned.ipa Payload >/dev/null
+          echo "IPA created:"; ls -lh QELCarePatient-unsigned.ipa
+
+      - name: Upload IPA as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: QELCarePatient-unsigned-ipa
+          path: QELCarePatient-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 30
