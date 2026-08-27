@@ -24,7 +24,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20   # Capacitor 8 needs Node 20+
+          node-version: 22   # Capacitor 8 CLI requires Node >= 22.0.0 (fatal on 20)
 
       # NOTE: `npm install` (not `npm ci`) because @capacitor/ios was just added
       # to package.json and may not be in the committed lockfile yet. install
