@@ -1,238 +1,192 @@
-# QELCare Patient Mobile App - Capacitor Android
+<div align="center">
 
-This is the patient-only mobile build of QELCare, regenerated after checking your uploaded `qelcaresql-V7.sql` full schema+data dump. It keeps only patient/auth flows, wraps them with Capacitor for Android APK generation, and includes a backend/database patch for patient registration and profile OTP support.
+<img src="assets/icon-only.png" alt="QELCare Patient" width="120" />
 
-## SQL compatibility result
+# QELCare Patient — Mobile App
 
-Your V7 SQL dump has the required database structure and enough real sample/live rows for the patient APK to work after the included patch is applied:
+**The patient-facing companion app for the QELCare clinic platform — native Android & iOS builds that let patients book appointments, view medical records, manage medications, and scan lab results, all from one React + Capacitor codebase.**
 
-- `users`, `roles`, `active_tokens`, and `user_addresses` for login, profile, and token/session storage
-- `patients` linked to `users.user_id` for patient-owned records
-- `appointments`, `specialties`, and verified Doctor users for patient booking
-- `medical_records` and `vitals` for read-only clinical history
-- `patient_medical_results` for patient-uploaded lab/medical result files, OCR text, and summary notes
-- `otp_requests` for password reset, registration, and profile verification after patching
+[![Capacitor](https://img.shields.io/badge/Capacitor-8-119EFF?logo=capacitor&logoColor=white)](https://capacitorjs.com/)
+[![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)](https://react.dev/)
+[![Vite](https://img.shields.io/badge/Build-Vite_7-646CFF?logo=vite&logoColor=white)](https://vitejs.dev/)
+[![Platforms](https://img.shields.io/badge/Platforms-Android_%7C_iOS-3DDC84?logo=android&logoColor=white)](#building-the-apps)
+[![React Router](https://img.shields.io/badge/Router-HashRouter_v7-CA4245?logo=reactrouter&logoColor=white)](https://reactrouter.com/)
 
-The only blocking database issue found is still in `otp_requests`: the dump contains two different purpose check constraints whose overlap only reliably allows `password_reset`. The included `patient_mobile_patch.sql` fixes this by replacing both old constraints with one safe constraint allowing:
+</div>
 
-```text
-password_reset, registration, email_verification, profile_update
+---
+
+## Overview
+
+**QELCare Patient** is the mobile client for [QELCare](https://github.com/acpilla/qelcareWebsite), a multispecialty clinic management platform. It packages the patient portion of the web application into native **Android** and **iOS** apps using [Capacitor](https://capacitorjs.com/), talking to the same Node/Express + PostgreSQL backend the clinic staff use.
+
+Rather than maintaining a separate mobile codebase, the app **reuses the web app's React components as-is** — a small custom Vite plugin compiles the existing `.js` files as JSX, so a single component library powers both web and mobile. The mobile entrypoint then strips out every staff, admin, and public-display route, hardens the app for patient-only use, and adapts navigation and routing for a native WebView.
+
+## Key Features
+
+### For patients
+- **Appointment booking & history** — browse doctors by specialty, book visits, and track upcoming and past appointments.
+- **Medical & health records** — read-only access to consultation records, vitals, and health history.
+- **Medications** — view prescribed medications in one place.
+- **Lab & medical results with OCR** — capture with the camera or upload a file (image or PDF); PDFs are rendered in-app with **pdf.js**, and document text is extracted through the backend OCR endpoint.
+- **Self-service account** — patient registration, OTP email verification, and forgot-password reset flows.
+- **Profile with OTP-gated edits** — changing username, email, phone, or address requires a fresh one-time code.
+
+### Mobile engineering highlights
+- **Single shared component library** — a custom Vite transform (`js-as-jsx`) lets the mobile build consume the web app's `.js` React components without renaming or forking them.
+- **Patient-only by construction** — all staff/admin/queue/landing routes are removed from the mobile entrypoint, and login rejects any non-`Patient` account.
+- **WebView-safe routing** — uses `HashRouter` so deep refreshes inside the Android/iOS WebView never break navigation.
+- **Idle auto-logout** — an inactivity timer signs patients out automatically, important for shared devices.
+- **Notch-aware, mobile-first UI** — `viewport-fit=cover` with safe-area insets and a dedicated responsive stylesheet; navigation is a slide-out drawer.
+- **No-Mac iOS pipeline** — a GitHub Actions workflow builds an unsigned iOS IPA on a macOS runner, so the app can be produced and sideloaded **without a Mac or a paid Apple Developer account** (see [Building the apps](#building-the-apps)).
+- **Configurable backend** — the API base URL is injected at build time via `VITE_API_URL` (with a `REACT_APP_API_URL` alias for parity with the web app).
+
+## Tech Stack
+
+| Area | Technologies |
+|---|---|
+| **App shell** | [Capacitor 8](https://capacitorjs.com/) (`@capacitor/core`, `@capacitor/android`, `@capacitor/ios`, `@capacitor/app`) |
+| **UI** | React 18, React Router v7 (`HashRouter`), hand-built responsive CSS (no UI framework) |
+| **Build tooling** | Vite 7, `@vitejs/plugin-react`, a custom `.js`-as-JSX transform, `@capacitor/assets` for icon/splash generation |
+| **Documents** | `pdfjs-dist` (in-app PDF rendering) + backend OCR for text extraction |
+| **CI / Distribution** | GitHub Actions (macOS runner → unsigned IPA artifact); Android APK via Gradle |
+| **Backend** | Shared [QELCare](https://github.com/acpilla/qelcareWebsite) Node/Express + PostgreSQL API |
+
+## What's Inside
+
+<details>
+<summary><strong>Screens & structure</strong></summary>
+
+```
+src/
+├── App.js                         # HashRouter + patient-only route map
+├── index.jsx                      # App entrypoint
+├── components/
+│   ├── Login/LoginScreen.js       # Login (blocks non-Patient accounts)
+│   ├── Register/RegisterScreen.js # Patient self-registration
+│   ├── ForgotPassword/            # Forgot-password flow
+│   ├── Verifications/             # OTP email verification / password reset
+│   ├── UserSide/
+│   │   ├── UserScreen.js          # Dashboard
+│   │   ├── UserBooking.js         # Book an appointment
+│   │   ├── PatientAppointments.js # Upcoming & past appointments
+│   │   ├── MedicalRecords.js      # Consultation records
+│   │   ├── HealthRecords.js       # Health history
+│   │   ├── MedicationScreen.js    # Medications
+│   │   ├── PatientResults.js      # Lab/medical results + OCR upload
+│   │   └── ProfileScreen.js       # Profile with OTP-gated edits
+│   ├── Layout/MainLayout.js       # Drawer navigation + shell
+│   ├── Layout/NotificationBell.js
+│   ├── Auth/PatientIdleTimeout.js # Inactivity auto-logout
+│   └── Workflow/ClinicUi.js       # Shared UI kit
+└── utils/                         # auth.js, roleAccess.js
+
+android/                           # Capacitor Android platform
+assets/                            # App icon + splash source images
+.github/workflows/build-ios.yml    # Unsigned-IPA CI pipeline
+capacitor.config.json              # appId: com.qelcare.patient
+vite.config.js                     # Vite config + js-as-jsx plugin
+```
+</details>
+
+## Getting Started
+
+### Prerequisites
+- **Node.js 22+** and npm — required by the Capacitor 8 CLI.
+- A running **QELCare backend** with patient endpoints enabled (see [Backend requirement](#backend-requirement)).
+- For Android builds: **Android Studio** + Android SDK.
+- For iOS builds: a Mac with Xcode **or** just this repo's GitHub Actions workflow (no Mac needed).
+
+### 1. Install
+```bash
+npm install
 ```
 
-You do **not** need to replace your full `.sql` dump. For your existing database, run the included patch SQL and compatibility check instead.
-
-See `SQL_REVIEW_V7.md` for the SQL review notes.
-
-## Privacy / safety note
-
-`qelcaresql-V7.sql` is a full data dump, not just schema. It includes rows like users, patients, active JWT tokens, password hashes, appointments, medical records, and result uploads. I did not include that full SQL dump in this ZIP. Do not distribute that dump with the APK project.
-
-## What is included
-
-Patient screens:
-
-- Dashboard: `src/components/UserSide/UserScreen.js`
-- Book appointment: `src/components/UserSide/UserBooking.js`
-- Appointments: `src/components/UserSide/AppointmentList.js`
-- Medical records: `src/components/UserSide/MedicalRecords.js`
-- Medications: `src/components/UserSide/MedicationScreen.js`
-- Lab results upload + OCR: `src/components/UserSide/PatientResults.js`
-- Profile with OTP-gated username/email/phone/address edits: `src/components/UserSide/ProfileScreen.js`
-
-Auth screens:
-
-- Login: `src/components/Login/LoginScreen.js`
-- Patient registration: `src/components/Register/RegisterScreen.js`
-- Registration OTP: `src/components/Verifications/CodeVerification.js`
-- Forgot password: `src/components/ForgotPassword/ForgotPassScreen.js`
-- Email verification/password reset: `src/components/Verifications/EmailVerification.js`
-
-Shared code:
-
-- `src/utils/auth.js`
-- `src/utils/roleAccess.js`
-- `src/components/Layout/MainLayout.js`
-- `src/components/Workflow/ClinicUi.js`
-
-Android/Capacitor:
-
-- `capacitor.config.json`
-- `android/` Capacitor platform project
-- `dist/` built web assets
-
-Backend patch:
-
-- `backend-patient-mobile-patch/qelcare-backend/features/auth/routes/patientRegistrationRoutes.js`
-- `backend-patient-mobile-patch/qelcare-backend/database/patient_mobile_patch.sql`
-- `backend-patient-mobile-patch/qelcare-backend/database/check_patient_mobile_compatibility.sql`
-- `backend-patient-mobile-patch/tools/apply-patient-mobile-backend-patch.cjs`
-
-## Main changes from the full web app
-
-- Removed Admin, Doctor, Nurse, Cashier, Frontdesk, public queue, and landing page routes from the mobile entrypoint.
-- Login blocks non-Patient users inside the mobile app.
-- Navigation is patient-only and mobile-friendly with drawer + bottom tabs.
-- Uses `HashRouter` so Android WebView deep refreshes do not break routes.
-- Uses Vite for fast mobile builds while keeping the existing React components.
-- Uses `VITE_API_URL` for the backend base URL.
-- Converts PDF OCR worker import to a Vite-compatible `?url` worker import.
-- Registration calls `/auth/patient/register` instead of the admin-only `/users` route.
-- Patient role is looked up by role name on the backend, so the app does not depend on a hard-coded role ID.
-- Profile/register validations match your V7 SQL column limits: username 50, email 100, first/last/middle name 50, suffix 10, phone fields 20.
-
-## Configure backend URL
-
-Copy `.env.example` to `.env` and set your real backend URL:
-
+### 2. Configure the backend URL
 ```bash
 cp .env.example .env
 ```
+Set `VITE_API_URL` to point at your backend:
 
-For an Android emulator talking to a backend running on your laptop:
+| Scenario | Value |
+|---|---|
+| Android emulator → backend on your machine | `http://10.0.2.2:5001` |
+| Real phone / installed app | `https://your-qelcare-backend.example.com` (deployed HTTPS) |
 
-```env
-VITE_API_URL=http://10.0.2.2:5001
-```
+> On a real phone, **never use `localhost`** — it resolves to the phone itself, not your development machine.
 
-For a real phone/APK, use a deployed HTTPS backend:
-
-```env
-VITE_API_URL=https://your-qelcare-backend.example.com
-```
-
-Do not use `localhost` for a real phone. On the phone, `localhost` means the phone itself, not your laptop/server.
-
-## Install and run as web app
-
+### 3. Run as a web app (fastest dev loop)
 ```bash
-npm install
-npm run dev
+npm run dev      # Vite dev server on http://localhost:3000
 ```
 
-## Build web assets
+## Building the Apps
 
+### Android
 ```bash
-npm run build
-```
-
-The build output goes to `dist/`, which is the Capacitor `webDir`.
-
-## Sync Capacitor Android
-
-```bash
-npx cap sync android
-```
-
-## Open in Android Studio
-
-```bash
-npx cap open android
-```
-
-In Android Studio, open the `android/` folder, let Gradle sync, then use:
-
-- Run button for emulator/device testing
-- Build > Build App Bundle(s) / APK(s) > Build APK(s) for a debug APK
-- Generate Signed Bundle / APK for production release signing
-
-## Build APK from command line
-
-After Android Studio/Android SDK/Gradle are installed and synced:
-
-```bash
+# Build web assets, sync into the native project, and assemble a debug APK
 npm run apk:debug
+# → android/app/build/outputs/apk/debug/app-debug.apk
 ```
-
-Expected debug APK path:
-
-```text
-android/app/build/outputs/apk/debug/app-debug.apk
-```
-
-For release:
-
+For a release build (requires your own signing key):
 ```bash
 npm run apk:release
 ```
-
-Release builds require your own signing key before distribution.
-
-## Backend patch required
-
-Patch files are included in:
-
-```text
-backend-patient-mobile-patch/
-```
-
-### Apply to your original full QELCare backend
-
-From the root of your original full QELCare repository, run:
-
+Or open the project in Android Studio to run on a device/emulator:
 ```bash
-node path/to/qelcare_patient_mobile_v3/backend-patient-mobile-patch/tools/apply-patient-mobile-backend-patch.cjs
+npm run cap:sync:android
+npm run cap:open:android
 ```
 
-Then run the SQL patch against your QELCare database:
+### iOS — no Mac required
+The [`build-ios.yml`](.github/workflows/build-ios.yml) GitHub Actions workflow produces a distributable iOS app **without a local Mac or a paid Apple Developer account**:
 
-```bash
-psql "$DATABASE_URL" -f qelcare-backend/database/patient_mobile_patch.sql
-```
+1. On every push to `main` (or a manual run), a **macOS runner** builds the Vite assets, generates the iOS project fresh (`cap add ios` → `cap sync ios`), and brands the icon and splash from `assets/`.
+2. It injects the required `Info.plist` usage strings (camera, photo library) and App Transport Security settings.
+3. It compiles an **unsigned** `.app`, packages it as `QELCarePatient-unsigned.ipa`, and uploads it as a build artifact.
+4. Download the artifact and sign/install it on your device with **[Sideloadly](https://sideloadly.io/)** using a free Apple ID.
 
-Then run the read-only compatibility check:
+## Backend Requirement
 
-```bash
-psql "$DATABASE_URL" -f qelcare-backend/database/check_patient_mobile_compatibility.sql
-```
+The app is a client for the shared **[QELCare backend](https://github.com/acpilla/qelcareWebsite)** and expects the patient self-service auth endpoints to be mounted at `/auth/patient/*` (patient registration, OTP verification, and profile updates), in addition to the core patient data endpoints.
 
-Restart the backend server after applying both.
+<details>
+<summary><strong>Endpoints the app calls</strong></summary>
 
-Do not replace your production database with the uploaded full SQL dump unless you intentionally want to rebuild/restore the database. For an existing/live database, the patch route is safer.
-
-If you restore the full V7 dump into a local/dev/staging database, the patch folder also includes `optional_clear_restored_sessions.sql` to clear copied active tokens and pending OTP rows. Do not run that optional cleanup on production unless you intentionally want to log out every active user.
-
-### Added backend routes
-
-Mounted at `/auth/patient`:
-
-- `POST /auth/patient/register`
-- `POST /auth/patient/register/resend`
-- `POST /auth/patient/register/verify`
-- `POST /auth/patient/profile/otp`
-- `POST /auth/patient/profile/otp/check`
-- `PUT /auth/patient/profile`
-
-## Backend endpoints used by the app
-
-Existing endpoints from your backend:
-
-- `POST /auth/login`
-- `POST /auth/otp/send`
-- `POST /auth/otp/verify`
-- `POST /auth/otp/resend`
+**Authentication**
+- `POST /auth/login`, `POST /auth/logout`
+- `POST /auth/otp/send` · `POST /auth/otp/verify` · `POST /auth/otp/resend`
 - `POST /auth/password/reset`
-- `POST /auth/logout`
-- `GET /users/me`
-- `GET /users/doctors`
-- `GET /patients/me`
-- `GET /appointments/me`
-- `POST /appointments/book`
-- `GET /medical-records/me`
-- `GET /vitals/me`
-- `GET /patient-results/me`
-- `POST /patient-results`
-- `PATCH /patient-results/:id`
-- `DELETE /patient-results/:id`
 
-Patch-added endpoints:
+**Patient self-service** (`/auth/patient/*`)
+- `POST /auth/patient/register` · `/register/verify` · `/register/resend`
+- `POST /auth/patient/profile/otp` · `/profile/otp/check`
+- `PUT  /auth/patient/profile`
 
-- `POST /auth/patient/register`
-- `POST /auth/patient/register/resend`
-- `POST /auth/patient/register/verify`
-- `POST /auth/patient/profile/otp`
-- `POST /auth/patient/profile/otp/check`
-- `PUT /auth/patient/profile`
+**Patient data**
+- `GET /users/me` · `GET /users/doctors` · `GET /patients/me`
+- `GET /appointments/me` · `POST /appointments/book`
+- `GET /medical-records/me` · `GET /vitals/me`
+- `GET /patient-results/me` · `POST /patient-results` · `POST /patient-results/ocr` · `PATCH` / `DELETE /patient-results/:id`
+</details>
 
-## Notes from validation
+## Configuration
 
-See `BUILD_VALIDATION.md` for the build commands and results.
+| Variable | Description |
+|---|---|
+| `VITE_API_URL` | Base URL of the QELCare backend (no trailing slash). Baked into the build. |
+| `REACT_APP_API_URL` | Optional alias, mapped by `vite.config.js` so shared web components work unchanged. |
+
+For installed builds, the committed `.env.production` supplies the backend URL that ships with the release.
+
+## Related
+
+- **[QELCare Web Platform](https://github.com/acpilla/qelcareWebsite)** — the full clinic management system (staff + patient web app, backend, and database) this app connects to.
+
+## License
+
+No open-source license has been declared for this repository, so all rights are reserved by the author by default. Please contact the maintainer before reusing the code.
+
+## Contact
+
+Built and maintained by **[@acpilla](https://github.com/acpilla)** · [Repository](https://github.com/acpilla/qelcareMobilePatient)

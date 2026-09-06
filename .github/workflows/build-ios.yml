@@ -48,6 +48,13 @@ jobs:
       - name: Sync Capacitor iOS (copies web + plugins, runs pod install)
         run: npx cap sync ios
 
+      # Brand the app: generate the iOS app icon + splash screen from the source
+      # images in assets/ (icon-only/foreground/background + splash + splash-dark),
+      # exactly like Android was branded. Without this, cap add ios only lays down
+      # Capacitor's default icon and a blank splash.
+      - name: Generate iOS app icon + splash (branding)
+        run: npx capacitor-assets generate --ios
+
       # Inject the App Store permission strings and App Transport Security into
       # the generated Info.plist. Edit the two description strings below if you
       # ever want to reword the iOS permission prompts.
