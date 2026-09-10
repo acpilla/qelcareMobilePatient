@@ -189,4 +189,4 @@ No open-source license has been declared for this repository, so all rights are 
 
 ## Contact
 
-Built and maintained by **[@acpilla](https://github.com/acpilla)** · [Repository](https://github.com/acpilla/qelcareMobilePatient)
+Built and maintained by **[@acpilla](https://github.com/acpilla)** · [Repository](https://github.com/acpilla/QElCare-Mobile-Patient)
